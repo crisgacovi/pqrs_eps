@@ -1,7 +1,7 @@
 <?php
 /**
  * Gestión de EPS - Sistema de PQRSs
- * Última modificación: 2025-07-02 05:54:10 UTC
+ * Última modificación: 2025-07-02 14:28:58 UTC
  * @author crisgacovi
  */
 
@@ -148,7 +148,7 @@ $sql = "SELECT e.*,
         GROUP_CONCAT(DISTINCT ee.email ORDER BY ee.id SEPARATOR '|') as emails
         FROM eps e 
         LEFT JOIN eps_emails ee ON e.id = ee.eps_id AND ee.estado = 1
-        GROUP BY e.id 
+        GROUP BY e.id, e.nombre, e.estado 
         ORDER BY e.nombre";
 $result = $conn->query($sql);
 
@@ -339,37 +339,47 @@ if (!$result) {
         }
 
         // Agregar campo de email
-        $(document).on('click', '.add-email', function() {
-            $(this).removeClass('btn-success add-email')
-                   .addClass('btn-danger remove-email')
-                   .find('i')
-                   .removeClass('bi-plus')
-                   .addClass('bi-trash');
+        $(document).on('click', '.add-email', function(e) {
+            e.preventDefault(); // Prevenir comportamiento por defecto
             
-            $('#emailContainer').append(addEmailField('', true));
+            // Agregar nuevo campo de email después del actual
+            $(this).closest('.input-group').after(addEmailField('', false));
+            
+            // Cambiar el botón actual a eliminar
+            $(this)
+                .removeClass('btn-success add-email')
+                .addClass('btn-danger remove-email')
+                .find('i')
+                .removeClass('bi-plus')
+                .addClass('bi-trash');
         });
 
         // Remover campo de email
-        $(document).on('click', '.remove-email', function() {
+        $(document).on('click', '.remove-email', function(e) {
+            e.preventDefault(); // Prevenir comportamiento por defecto
+            
             const container = $('#emailContainer');
             const emailGroups = container.find('.input-group');
             
-            // Si es el último campo, no lo eliminamos
+            // Si es el último campo, solo limpiarlo
             if (emailGroups.length === 1) {
                 $(this).closest('.input-group').find('input').val('');
                 return;
             }
             
+            // Eliminar el grupo actual
             $(this).closest('.input-group').remove();
             
             // Asegurarse que el primer campo tenga el botón de agregar
             const firstGroup = container.find('.input-group:first');
-            firstGroup.find('button')
-                     .removeClass('btn-danger remove-email')
-                     .addClass('btn-success add-email')
-                     .find('i')
-                     .removeClass('bi-trash')
-                     .addClass('bi-plus');
+            if (!firstGroup.find('button').hasClass('add-email')) {
+                firstGroup.find('button')
+                    .removeClass('btn-danger remove-email')
+                    .addClass('btn-success add-email')
+                    .find('i')
+                    .removeClass('bi-trash')
+                    .addClass('bi-plus');
+            }
         });
 
         // Manejo del modal
@@ -382,8 +392,6 @@ if (!$result) {
                 const nombre = button.data('nombre');
                 const emailsStr = button.data('emails');
                 const estado = button.data('estado');
-
-                console.log('Editando EPS:', { id, nombre, emailsStr, estado }); // Debug
 
                 $('#epsModalLabel').text('Editar EPS');
                 $('#epsForm input[name="action"]').val('edit');
@@ -416,9 +424,6 @@ if (!$result) {
                 $('#emailContainer').empty().append(addEmailField('', true));
             }
         });
-
-        // Remover el evento click anterior de edit-eps
-        $('.edit-eps').off('click');
 
         // Manejo del modal de eliminación
         $('.delete-eps').click(function() {
