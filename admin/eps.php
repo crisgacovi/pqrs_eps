@@ -1,7 +1,7 @@
 <?php
 /**
  * Gestión de EPS - Sistema de PQRSs
- * Última modificación: 2025-07-02 05:08:50 UTC
+ * Última modificación: 2025-07-02 05:54:10 UTC
  * @author crisgacovi
  */
 
@@ -148,9 +148,15 @@ $sql = "SELECT e.*,
         GROUP_CONCAT(DISTINCT ee.email ORDER BY ee.id SEPARATOR '|') as emails
         FROM eps e 
         LEFT JOIN eps_emails ee ON e.id = ee.eps_id AND ee.estado = 1
-        GROUP BY e.id, e.nombre, e.estado 
+        GROUP BY e.id 
         ORDER BY e.nombre";
 $result = $conn->query($sql);
+
+if (!$result) {
+    error_log("Error en consulta SQL: " . $conn->error);
+    $_SESSION['mensaje'] = "Error al cargar las EPS.";
+    $_SESSION['tipo_mensaje'] = 'danger';
+}
 ?>
 
 <!DOCTYPE html>
@@ -223,6 +229,8 @@ $result = $conn->query($sql);
                                         </td>
                                         <td>
                                             <button type="button" class="btn btn-sm btn-outline-primary edit-eps" 
+                                                    data-bs-toggle="modal"
+                                                    data-bs-target="#epsModal"
                                                     data-id="<?php echo $row['id']; ?>"
                                                     data-nombre="<?php echo htmlspecialchars($row['nombre']); ?>"
                                                     data-emails="<?php echo htmlspecialchars($row['emails'] ?? ''); ?>"
@@ -364,38 +372,53 @@ $result = $conn->query($sql);
                      .addClass('bi-plus');
         });
 
-        // Manejo del modal de edición
-        $('.edit-eps').click(function() {
-            const id = $(this).data('id');
-            const nombre = $(this).data('nombre');
-            const emailsStr = $(this).data('emails');
-            const estado = $(this).data('estado');
+        // Manejo del modal
+        $('#epsModal').on('show.bs.modal', function(e) {
+            const button = $(e.relatedTarget);
+            
+            if (button.hasClass('edit-eps')) {
+                // Modo edición
+                const id = button.data('id');
+                const nombre = button.data('nombre');
+                const emailsStr = button.data('emails');
+                const estado = button.data('estado');
 
-            $('#epsModalLabel').text('Editar EPS');
-            $('#epsForm input[name="action"]').val('edit');
-            $('#epsForm input[name="id"]').val(id);
-            $('#epsForm input[name="nombre"]').val(nombre);
-            $('#epsForm input[name="estado"]').prop('checked', estado == 1);
+                console.log('Editando EPS:', { id, nombre, emailsStr, estado }); // Debug
 
-            // Limpiar contenedor de emails
-            $('#emailContainer').empty();
+                $('#epsModalLabel').text('Editar EPS');
+                $('#epsForm input[name="action"]').val('edit');
+                $('#epsForm input[name="id"]').val(id);
+                $('#epsForm input[name="nombre"]').val(nombre);
+                $('#epsForm input[name="estado"]').prop('checked', estado == 1);
 
-            // Agregar campos de email
-            if (emailsStr) {
-                const emails = emailsStr.split('|').filter(email => email.trim());
-                if (emails.length > 0) {
-                    emails.forEach((email, index) => {
-                        $('#emailContainer').append(addEmailField(email, index === 0));
-                    });
+                // Limpiar contenedor de emails
+                $('#emailContainer').empty();
+
+                // Agregar campos de email
+                if (emailsStr) {
+                    const emails = emailsStr.split('|').filter(email => email.trim());
+                    if (emails.length > 0) {
+                        emails.forEach((email, index) => {
+                            $('#emailContainer').append(addEmailField(email, index === 0));
+                        });
+                    } else {
+                        $('#emailContainer').append(addEmailField('', true));
+                    }
                 } else {
                     $('#emailContainer').append(addEmailField('', true));
                 }
             } else {
-                $('#emailContainer').append(addEmailField('', true));
+                // Modo creación
+                $('#epsModalLabel').text('Nueva EPS');
+                $('#epsForm')[0].reset();
+                $('#epsForm input[name="action"]').val('create');
+                $('#epsForm input[name="id"]').val('');
+                $('#emailContainer').empty().append(addEmailField('', true));
             }
-
-            $('#epsModal').modal('show');
         });
+
+        // Remover el evento click anterior de edit-eps
+        $('.edit-eps').off('click');
 
         // Manejo del modal de eliminación
         $('.delete-eps').click(function() {
@@ -405,19 +428,6 @@ $result = $conn->query($sql);
             $('#deleteEpsId').val(id);
             $('#deleteEpsName').text(nombre);
             $('#deleteModal').modal('show');
-        });
-
-        // Resetear el formulario al abrir el modal de creación
-        $('#epsModal').on('show.bs.modal', function(e) {
-            if (!$(e.relatedTarget) || !$(e.relatedTarget).hasClass('edit-eps')) {
-                $('#epsModalLabel').text('Nueva EPS');
-                $('#epsForm')[0].reset();
-                $('#epsForm input[name="action"]').val('create');
-                $('#epsForm input[name="id"]').val('');
-                
-                // Resetear campos de email
-                $('#emailContainer').empty().append(addEmailField('', true));
-            }
         });
 
         // Validación antes de enviar el formulario
