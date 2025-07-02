@@ -1,7 +1,7 @@
 <?php
 /**
  * Funciones de Email - Sistema de PQRSs
- * Última modificación: 2025-05-22
+ * Última modificación: 2025-07-02 03:39:18
  * @author crisgacovi
  */
 
@@ -21,7 +21,7 @@ use PHPMailer\PHPMailer\Exception;
 function obtenerDetallesPQRS($pqrs_id) {
     global $conn;
 
-    $sql = "SELECT q.*, c.nombre as ciudad_nombre, e.nombre as eps_nombre, e.email as eps_email, 
+    $sql = "SELECT q.*, c.nombre as ciudad_nombre, e.nombre as eps_nombre, e.id as eps_id,
                    t.nombre as tipo_pqrs_nombre 
             FROM pqrss q 
             JOIN ciudades c ON q.ciudad_id = c.id 
@@ -138,31 +138,41 @@ function enviarEmailPaciente($mail, $pqrs, $pqrs_id, $mensaje_adicional) {
  * @param PHPMailer $mail Instancia de PHPMailer
  * @param array $pqrs Datos de la pqrs
  * @param int $pqrs_id ID de la pqrs
- * @throws Exception si hay error al enviar el email o si la EPS no tiene email registrado
+ * @throws Exception si hay error al enviar el email o si la EPS no tiene emails registrados
  */
 function enviarEmailEPS($mail, $pqrs, $pqrs_id) {
-    if (empty($pqrs['eps_email'])) {
-        throw new Exception("La EPS no tiene un correo electrónico registrado.");
+    global $conn;
+    
+    // Obtener todos los emails activos de la EPS
+    $stmt = $conn->prepare("SELECT email FROM eps_emails WHERE eps_id = ? AND estado = 1");
+    $stmt->bind_param("i", $pqrs['eps_id']);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    
+    if ($result->num_rows === 0) {
+        throw new Exception("La EPS no tiene correos electrónicos registrados.");
     }
 
-    $mail->addAddress($pqrs['eps_email'], $pqrs['eps_nombre']);
+    // Agregar todos los destinatarios
+    while ($row = $result->fetch_assoc()) {
+        $mail->addAddress($row['email'], $pqrs['eps_nombre']);
+    }
+
     $mail->isHTML(true);
     $mail->Subject = "Nueva PQRS Registrada #" . $pqrs_id;
 
     $fecha_limite = date('Y-m-d', strtotime($pqrs['fecha_creacion'] . ' + 15 weekdays'));
 
-    // ==== ADJUNTAR ARCHIVO SI EXISTE Y ES ACCESIBLE ====
+    // Adjuntar archivo si existe
     if (!empty($pqrs['archivo_adjunto'])) {
         // Normalizar para Windows y quitar http(s):// si llega por error
         $ruta_relativa = preg_replace('#^https?://[^/]+/#', '', $pqrs['archivo_adjunto']);
         $ruta_relativa = str_replace(['/', '\\'], DIRECTORY_SEPARATOR, ltrim($ruta_relativa, '/\\'));
-        // Construir la ruta absoluta en Windows
+        // Construir la ruta absoluta
         $ruta_fisica = rtrim($_SERVER['DOCUMENT_ROOT'], '/\\') . DIRECTORY_SEPARATOR . $ruta_relativa;
-        // error_log("Buscando adjunto: " . $ruta_fisica);
+        
         if (file_exists($ruta_fisica) && is_file($ruta_fisica)) {
             $mail->addAttachment($ruta_fisica);
-        } else {
-            // error_log("No se encontró el archivo adjunto para EPS: " . $ruta_fisica);
         }
     }
 
