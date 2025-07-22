@@ -4,10 +4,7 @@
 // Iniciar nuevo búfer
 ob_start();
 
-// Deshabilitar todos los errores de salida
-error_reporting(0);
-ini_set('display_errors', 0);
-
+// Configurar cabeceras
 header('Content-Type: application/json; charset=utf-8');
 
 session_start();
@@ -15,6 +12,7 @@ session_start();
 // Verificar si el usuario está autenticado
 if (!isset($_SESSION['admin_loggedin']) || $_SESSION['admin_loggedin'] !== true) {
     ob_end_clean();
+    http_response_code(401);
     echo json_encode([
         'success' => false,
         'message' => 'No autorizado'
@@ -47,13 +45,17 @@ try {
     }
 
 } catch (Exception $e) {
+    // Asegurar que cualquier salida previa sea limpiada
+    ob_clean();
+    
+    http_response_code(500);
     $response = [
         'success' => false,
         'message' => $e->getMessage()
     ];
 }
 
-// Limpiar cualquier salida anterior
+// Asegurar que no hay salida previa
 ob_end_clean();
 
 // Enviar la respuesta JSON
